@@ -1,0 +1,46 @@
+[project]
+name = "agentbase-workspace"
+version = "0.1.0"
+description = "AgentBase — Context Database for AI Agents"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv.workspace]
+members = [
+    "packages/agentbase-core",
+    "packages/agentbase-sdk",
+    "packages/agentbase-cli",
+    "packages/agentbase-mcp",
+    "packages/agentbase-web",
+]
+
+[tool.uv.sources]
+agentbase-core = { workspace = true }
+agentbase-sdk = { workspace = true }
+agentbase-cli = { workspace = true }
+agentbase-mcp = { workspace = true }
+agentbase-web = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "unit: unit tests (no external dependencies)",
+    "integration: integration tests (requires SQLite)",
+    "llm: tests requiring LLM API",
+    "e2e: end-to-end tests",
+]
+
+[dependency-groups]
+dev = [
+    "backoff>=2.2.1",
+    "openai>=2.32.0",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    # Include workspace sub-packages so `uv run` / `uv sync` pulls them all.
+    "agentbase-core",
+    "agentbase-sdk",
+    "agentbase-cli",
+    "agentbase-mcp",
+    "agentbase-web",
+]

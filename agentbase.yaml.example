@@ -1,0 +1,157 @@
+# ============================================================
+# AgentBase 配置文件模板
+# ============================================================
+#
+# 使用方式：
+#   1. 复制本文件为 agentbase.yaml
+#      cp agentbase.yaml.example agentbase.yaml
+#
+#   2. 按需修改配置项
+#
+#   3. 在代码中加载：
+#      from agentbase_core.models.config import AgentBaseConfig
+#      config = AgentBaseConfig.from_yaml("agentbase.yaml")
+#
+#   或通过环境变量覆盖（环境变量优先级高于本文件）：
+#      export AGENTBASE_INDEX__VECTOR_ENABLED=true
+#      export AGENTBASE_GRAPH__ENABLED=true
+#
+#   环境变量格式：AGENTBASE_<大写键名>，嵌套用 __ 分隔
+#   例如：AGENTBASE_EMBEDDING__API_KEY 对应 embedding.api_key
+#
+# ============================================================
+
+
+# --- 基础路径 ---
+# 数据存储目录，默认 ~/.agentbase
+data_dir: ~/.agentbase
+
+# SQLite 数据库文件名
+db_filename: agentbase.db
+
+
+# --- 嵌入模型配置 ---
+embedding:
+  # 模型名称（OpenAI 兼容接口）
+  model: text-embedding-3-small
+
+  # 向量维度，需与模型匹配
+  # text-embedding-3-small: 1536
+  # text-embedding-3-large: 3072
+  dimensions: 1536
+
+  # API 地址（留空使用 OpenAI 默认）
+  # api_base: https://api.openai.com/v1
+
+  # API 密钥（建议通过环境变量设置：AGENTBASE_EMBEDDING__API_KEY）
+  # api_key: sk-xxx
+
+  # 并发嵌入请求上限
+  max_concurrent: 10
+
+
+# --- LLM 配置 ---
+# 用于 L0/L1 层级生成、会话摘要、记忆提取、实体抽取等
+llm:
+  # 模型名称
+  model: gpt-4o-mini
+
+  # API 地址（留空使用 OpenAI 默认，也兼容其他 OpenAI 格式接口）
+  # api_base: https://api.openai.com/v1
+
+  # API 密钥（建议通过环境变量设置：AGENTBASE_LLM__API_KEY）
+  # api_key: sk-xxx
+
+  # 生成温度（越低越确定性，越高越创造性）
+  temperature: 0.1
+
+  # 单次最大生成 token 数
+  max_tokens: 1024
+
+
+# --- 索引配置 ---
+index:
+  # 向量检索开关
+  # false（默认）：仅使用 FTS5 全文搜索，结果标记 degrade_reason="vec_unavailable"
+  # true：启用 FTS + sqlite-vec 向量检索 + RRF 融合搜索
+  vector_enabled: false
+
+  # FTS BM25 权重（0~1，与 vec_weight 之和建议为 1.0）
+  fts_weight: 0.4
+
+  # 向量相似度权重（0~1）
+  vec_weight: 0.6
+
+  # RRF 平滑常数（一般不需要调整）
+  rrf_k: 60
+
+  # 去重相似度阈值（0~1）
+  # 低于此值判定为不同条目，高于此值判定为重复
+  dedup_threshold: 0.92
+
+
+# --- 知识图谱配置 ---
+# 需要开启后才能使用实体、关系、图遍历等功能
+graph:
+  # 是否启用知识图谱（默认关闭）
+  enabled: false
+
+  # 图遍历最大深度（防止递归爆炸）
+  max_traversal_depth: 4
+
+  # 实体数量上限
+  max_entities: 10000
+
+  # 关系数量上限
+  max_relations: 50000
+
+  # 摄取时自动抽取实体（需要 LLM）
+  extract_on_ingest: true
+
+
+# --- 会话管理配置 ---
+# 需要开启后才能使用会话创建、消息、提交等功能
+session:
+  # 是否启用会话管理（默认关闭）
+  enabled: false
+
+  # 提交时保留最近 N 轮对话（一轮 = 一条 user 消息开始到下一条 user 消息之前）
+  keep_recent_turns: 6
+
+  # 自动提交（关闭时需手动调用 commit_session）
+  auto_commit: false
+
+  # 提交时自动提取记忆（需要 LLM）
+  extract_memories: true
+
+
+# --- 三层内容配置 (L0/L1/L2) ---
+tier:
+  # 是否启用 L0/L1 层级生成（关闭则只有 L2 全文）
+  enabled: true
+
+  # 异步生成 L0/L1（不阻塞写入）
+  async_generation: true
+
+  # 最大并发生成任务数
+  max_concurrent: 5
+
+  # 无 LLM 时截断降级（用原文前 N 字符替代 L0/L1）
+  fallback_to_truncation: true
+
+
+# --- 可观测性配置 ---
+# 需要开启后才能使用追踪、指标、调试等功能
+observability:
+  # 是否启用可观测性（默认关闭）
+  enabled: false
+
+  # 持久化检索追踪到数据库
+  persist_traces: true
+
+  # 追踪采样率（1.0 = 全量采集，0.1 = 10% 采集）
+  # 生产环境建议 0.01~0.1，开发/调试环境设为 1.0
+  trace_sample_rate: 1.0
+
+  # 追踪数据最大保留天数
+  max_trace_age_days: 30

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AgentBase Dashboard{% endblock %}</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2>AgentBase</h2>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+        </div>
+        <ul class="nav-links">
+            <li><a href="/" class="{% block nav_dashboard %}{% endblock %}">
+                <span class="nav-icon">📊</span> <span>Dashboard</span>
+            </a></li>
+            <li><a href="/memory" class="{% block nav_memory %}{% endblock %}">
+                <span class="nav-icon">🧠</span> <span>Context</span>
+            </a></li>
+            <li><a href="/timeline" class="{% block nav_timeline %}{% endblock %}">
+                <span class="nav-icon">📅</span> <span>Timeline</span>
+            </a></li>
+            <li><a href="/graph" class="{% block nav_graph %}{% endblock %}">
+                <span class="nav-icon">🕸️</span> <span>Graph</span>
+            </a></li>
+            <li><a href="/sessions" class="{% block nav_sessions %}{% endblock %}">
+                <span class="nav-icon">💬</span> <span>Sessions</span>
+            </a></li>
+            <li><a href="/traces" class="{% block nav_traces %}{% endblock %}">
+                <span class="nav-icon">🔍</span> <span>Traces</span>
+            </a></li>
+        </ul>
+        <div class="global-search">
+            <input type="text" id="global-search" placeholder="Search all context..."
+                   onkeydown="if(event.key==='Enter') globalSearch()">
+        </div>
+    </nav>
+    <main class="content">
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+    <script>
+    // Dark mode
+    function toggleTheme() {
+        const html = document.documentElement;
+        const current = html.getAttribute('data-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('agentbase-theme', next);
+        document.querySelector('.theme-toggle').textContent = next === 'dark' ? '☀️' : '🌙';
+    }
+    // Init theme
+    (function() {
+        const saved = localStorage.getItem('agentbase-theme');
+        if (saved) {
+            document.documentElement.setAttribute('data-theme', saved);
+            if (saved === 'dark') document.querySelector('.theme-toggle').textContent = '☀️';
+        }
+    })();
+
+    // Global search
+    function globalSearch() {
+        const q = document.getElementById('global-search').value.trim();
+        if (q) window.location.href = '/memory?search=' + encodeURIComponent(q);
+    }
+    // Pre-fill search from URL
+    (function() {
+        const params = new URLSearchParams(window.location.search);
+        const q = params.get('search');
+        if (q && document.getElementById('search-query')) {
+            document.getElementById('search-query').value = q;
+            if (typeof searchEntries === 'function') searchEntries();
+        }
+    })();
+    </script>
+</body>
+</html>

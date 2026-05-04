@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Traces - AgentBase{% endblock %}
+{% block nav_traces %}active{% endblock %}
+
+{% block content %}
+<h1>Retrieval Traces <span class="count" id="trace-count"></span></h1>
+
+<div id="traces-list" class="traces-list">
+    <p class="loading">Loading...</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadTraces() {
+    const resp = await fetch('/api/traces?limit=50');
+    const data = await resp.json();
+    const list = document.getElementById('traces-list');
+
+    document.getElementById('trace-count').textContent = `(${(data.traces || []).length})`;
+
+    if (!data.traces || data.traces.length === 0) {
+        list.innerHTML = '<p class="empty">No traces found. Enable observability to record traces.</p>';
+        return;
+    }
+
+    list.innerHTML = `
+    <table class="traces-table">
+        <thead>
+            <tr>
+                <th>Query</th>
+                <th>Strategy</th>
+                <th>Latency</th>
+                <th>Results</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${data.traces.map(t => `
+            <tr class="trace-row" onclick="toggleTrace('${t.id}')">
+                <td>${escHtml(t.query)}</td>
+                <td><span class="badge badge-strategy">${t.strategy}</span></td>
+                <td>${t.latency_ms}ms</td>
+                <td>${t.result_count}</td>
+                <td>${timeAgo(t.created_at)}</td>
+            </tr>
+            <tr class="trace-detail-row" id="trace-${t.id}" style="display:none">
+                <td colspan="5">
+                    <div class="trace-detail" id="trace-detail-${t.id}">
+                        <p class="loading">Loading...</p>
+                    </div>
+                </td>
+            </tr>`).join('')}
+        </tbody>
+    </table>`;
+}
+
+async function toggleTrace(id) {
+    const row = document.getElementById('trace-' + id);
+    const detail = document.getElementById('trace-detail-' + id);
+
+    if (row.style.display !== 'none' && detail.dataset.loaded) {
+        row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+        return;
+    }
+    row.style.display = 'table-row';
+
+    const resp = await fetch('/api/traces/' + id);
+    const data = await resp.json();
+
+    if (data.error) {
+        detail.innerHTML = `<p class="empty">${data.error}</p>`;
+        detail.dataset.loaded = 'true';
+        return;
+    }
+
+    // Build waterfall from steps
+    const steps = data.steps || [];
+    const maxLatency = Math.max(...steps.map(s => s.latency_ms || 0), 1);
+
+    const waterfall = steps.length ? `
+        <div class="waterfall">
+            ${steps.map(s => {
+                const lat = s.latency_ms || 0;
+                const pct = (lat / maxLatency * 100).toFixed(1);
+                const cls = lat < maxLatency * 0.3 ? 'fast' : lat < maxLatency * 0.7 ? 'medium' : 'slow';
+                const name = s.name || s.step_name || 'Step';
+                const input = s.input_count != null ? s.input_count : '?';
+                const output = s.output_count != null ? s.output_count : '?';
+                const budget = s.budget_before != null ? `Budget: ${s.budget_before} → ${s.budget_after}` : '';
+                return `<div class="waterfall-item">
+                    <div class="waterfall-name" title="${escHtml(name)}">${escHtml(name)}</div>
+                    <div class="waterfall-bar-bg">
+                        <div class="waterfall-bar ${cls}" style="width:${pct}%"></div>
+                    </div>
+                    <div class="waterfall-time">${lat}ms</div>
+                </div>`;
+            }).join('')}
+        </div>` : '<p class="empty">No step details.</p>';
+
+    detail.innerHTML = `
+        <div class="trace-summary">
+            <span>ID: ${data.id}</span>
+            <span>Strategy: ${data.strategy}</span>
+            <span>Results: ${data.result_count}</span>
+            <span>Budget: ${data.token_budget_used || 0} / ${data.token_budget_limit || 0}</span>
+        </div>
+        ${waterfall}`;
+    detail.dataset.loaded = 'true';
+}
+
+function escHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+function timeAgo(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    return Math.floor(diff/86400) + 'd ago';
+}
+
+loadTraces();
+</script>
+{% endblock %}

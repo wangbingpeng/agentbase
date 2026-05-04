@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block title %}Context - AgentBase{% endblock %}
+{% block nav_memory %}active{% endblock %}
+
+{% block content %}
+<h1>Context Entries <span class="count" id="total-count"></span></h1>
+
+<div class="memory-layout">
+    <!-- Left sidebar: category nav -->
+    <div class="memory-sidebar">
+        <div class="category-nav">
+            <div class="category-nav-title">Categories</div>
+            <div class="category-nav-item active" data-type="" data-category="" onclick="filterCategory(this)">
+                <span>📊 All</span> <span class="nav-count" id="nav-all">--</span>
+            </div>
+            <div class="category-nav-item" data-type="memory" data-category="" onclick="filterCategory(this)">
+                <span>🧠 Memory</span> <span class="nav-count" id="nav-memory">--</span>
+            </div>
+            <div class="category-nav-item" data-type="memory" data-category="profile" onclick="filterCategory(this)">
+                <span>&nbsp;&nbsp;👤 Profile</span> <span class="nav-count" id="nav-profile">--</span>
+            </div>
+            <div class="category-nav-item" data-type="memory" data-category="preference" onclick="filterCategory(this)">
+                <span>&nbsp;&nbsp;⚡ Preference</span> <span class="nav-count" id="nav-preference">--</span>
+            </div>
+            <div class="category-nav-item" data-type="memory" data-category="entity" onclick="filterCategory(this)">
+                <span>&nbsp;&nbsp;🏷️ Entity</span> <span class="nav-count" id="nav-entity">--</span>
+            </div>
+            <div class="category-nav-item" data-type="memory" data-category="event" onclick="filterCategory(this)">
+                <span>&nbsp;&nbsp;📅 Event</span> <span class="nav-count" id="nav-event">--</span>
+            </div>
+            <div class="category-nav-item" data-type="memory" data-category="case" onclick="filterCategory(this)">
+                <span>&nbsp;&nbsp;📋 Case</span> <span class="nav-count" id="nav-case">--</span>
+            </div>
+            <div class="category-nav-item" data-type="memory" data-category="pattern" onclick="filterCategory(this)">
+                <span>&nbsp;&nbsp;🔄 Pattern</span> <span class="nav-count" id="nav-pattern">--</span>
+            </div>
+            <div class="category-nav-title" style="margin-top:4px">Other Types</div>
+            <div class="category-nav-item" data-type="resource" data-category="" onclick="filterCategory(this)">
+                <span>📄 Resource</span> <span class="nav-count" id="nav-resource">--</span>
+            </div>
+            <div class="category-nav-item" data-type="skill" data-category="" onclick="filterCategory(this)">
+                <span>🔧 Skill</span> <span class="nav-count" id="nav-skill">--</span>
+            </div>
+        </div>
+
+        <!-- Tag Cloud -->
+        <div style="margin-top:16px">
+            <div class="category-nav-title" style="padding-left:0">Top Tags</div>
+            <div id="tag-cloud" class="tag-cloud"></div>
+        </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="memory-main">
+        <div class="filter-bar">
+            <select id="filter-scope" onchange="loadEntries()">
+                <option value="">All Scopes</option>
+                <option value="global">🌐 Global</option>
+                <option value="agent">🤖 Agent</option>
+                <option value="project">📁 Project</option>
+                <option value="session">💬 Session</option>
+            </select>
+            <input type="text" id="search-query" placeholder="Search context..."
+                   onkeydown="if(event.key==='Enter') searchEntries()">
+            <button onclick="searchEntries()">Search</button>
+            <button class="secondary" onclick="loadEntries()">Reset</button>
+            <div class="view-toggle">
+                <button id="view-list" class="active" onclick="setView('list')">☰</button>
+                <button id="view-grid" onclick="setView('grid')">⊞</button>
+            </div>
+        </div>
+
+        <div id="memory-list" class="memory-list">
+            <p class="loading">Loading...</p>
+        </div>
+
+        <div id="pagination" class="pagination"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentOffset = 0;
+let currentType = '';
+let currentCategory = '';
+let currentView = 'list';
+const PAGE_SIZE = 30;
+let categoryCounts = {};
+
+// Load category counts on init
+async function loadCounts() {
+    try {
+        const resp = await fetch('/api/health');
+        const health = await resp.json();
+        const coverage = health.type_coverage || [];
+        categoryCounts = {all: 0, memory: 0, resource: 0, skill: 0, profile: 0, preference: 0, entity: 0, event: 0, case: 0, pattern: 0};
+        coverage.forEach(c => {
+            categoryCounts[c.type] = (categoryCounts[c.type] || 0) + c.count;
+            categoryCounts.all += c.count;
+            if (c.category && c.category !== 'none') {
+                categoryCounts[c.category] = (categoryCounts[c.category] || 0) + c.count;
+            }
+        });
+        Object.keys(categoryCounts).forEach(k => {
+            const el = document.getElementById('nav-' + k);
+            if (el) el.textContent = categoryCounts[k] || 0;
+        });
+
+        // Tag cloud
+        const tags = health.top_tags || [];
+        const maxC = tags.length ? tags[0].count : 1;
+        document.getElementById('tag-cloud').innerHTML = tags.map(t => {
+            const s = t.count / maxC;
+            const cls = s > 0.7 ? 'size-lg' : s > 0.3 ? 'size-md' : 'size-sm';
+            return `<span class="tag ${cls}" onclick="searchByTag('${escAttr(t.tag)}')" title="${t.count}">${escHtml(t.tag)}</span>`;
+        }).join('');
+    } catch(e) { console.error('Failed to load counts:', e); }
+}
+
+function searchByTag(tag) {
+    document.getElementById('search-query').value = tag;
+    searchEntries();
+}
+
+function filterCategory(el) {
+    document.querySelectorAll('.category-nav-item').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    currentType = el.dataset.type;
+    currentCategory = el.dataset.category;
+    loadEntries();
+}
+
+function setView(v) {
+    currentView = v;
+    document.getElementById('view-list').classList.toggle('active', v === 'list');
+    document.getElementById('view-grid').classList.toggle('active', v === 'grid');
+    loadEntries();
+}
+
+async function loadEntries() {
+    currentOffset = 0;
+    await fetchEntries();
+}
+
+async function fetchEntries() {
+    const scope = document.getElementById('filter-scope').value;
+    const params = new URLSearchParams({limit: PAGE_SIZE, offset: currentOffset});
+    if (currentType) params.set('type', currentType);
+    if (scope) params.set('scope', scope);
+
+    const resp = await fetch('/api/entries?' + params);
+    const data = await resp.json();
+    renderEntries(data);
+}
+
+async function searchEntries() {
+    const q = document.getElementById('search-query').value.trim();
+    if (!q) { loadEntries(); return; }
+    const scope = document.getElementById('filter-scope').value;
+    const params = new URLSearchParams({q, top_k: 30});
+    if (currentType) params.set('type', currentType);
+    if (scope) params.set('scope', scope);
+
+    const resp = await fetch('/api/search?' + params);
+    const data = await resp.json();
+    renderSearchResults(data);
+}
+
+function renderEntries(data) {
+    const list = document.getElementById('memory-list');
+    if (!data.entries || data.entries.length === 0) {
+        list.innerHTML = '<p class="empty">No entries found.</p>';
+        list.className = 'memory-list';
+        document.getElementById('pagination').innerHTML = '';
+        document.getElementById('total-count').textContent = '';
+        return;
+    }
+    document.getElementById('total-count').textContent = `(${data.total})`;
+
+    if (currentView === 'grid') {
+        list.className = 'memory-grid';
+        list.innerHTML = data.entries.map(e => entryCard(e)).join('');
+    } else {
+        list.className = 'memory-list';
+        // Group by time
+        const grouped = groupByTime(data.entries);
+        let html = '';
+        for (const [label, entries] of Object.entries(grouped)) {
+            html += `<div class="time-group">${label}</div>`;
+            html += entries.map(e => entryCard(e)).join('');
+        }
+        list.innerHTML = html;
+    }
+    renderPagination(data.total, data.offset, data.limit);
+}
+
+function renderSearchResults(data) {
+    const list = document.getElementById('memory-list');
+    if (!data.results || data.results.length === 0) {
+        list.innerHTML = '<p class="empty">No results found.</p>';
+        list.className = 'memory-list';
+        document.getElementById('pagination').innerHTML = '';
+        return;
+    }
+    list.className = currentView === 'grid' ? 'memory-grid' : 'memory-list';
+    list.innerHTML = data.results.map(r => entryCard(r, r.score)).join('');
+    document.getElementById('pagination').innerHTML = '';
+}
+
+function groupByTime(entries) {
+    const now = new Date();
+    const groups = {'Today': [], 'This Week': [], 'This Month': [], 'Older': []};
+    entries.forEach(e => {
+        const d = new Date(e.created_at);
+        const diffDays = (now - d) / 86400000;
+        if (diffDays < 1) groups['Today'].push(e);
+        else if (diffDays < 7) groups['This Week'].push(e);
+        else if (diffDays < 30) groups['This Month'].push(e);
+        else groups['Older'].push(e);
+    });
+    // Remove empty groups
+    const result = {};
+    for (const [k, v] of Object.entries(groups)) { if (v.length) result[k] = v; }
+    return result;
+}
+
+function entryCard(e, score) {
+    const scoreBadge = score ? `<span class="score-badge">Score: ${score}</span>` : '';
+    const tags = (e.tags || []).slice(0, 5).map(t => `<span class="tag">${escHtml(t)}</span>`).join('');
+    const cat = e.category || '';
+    const catCls = cat ? `badge-cat-${cat}` : '';
+    const catIcon = cat ? `cat-icon-${cat}` : '';
+    const scopeCls = `badge-scope-${e.scope || 'global'}`;
+    const conf = e.confidence || 0;
+    const confLevel = conf >= 0.9 ? 'high' : conf >= 0.6 ? 'medium' : 'low';
+    const confPct = Math.round(conf * 100);
+    const time = e.created_at ? timeAgo(e.created_at) : '';
+
+    return `
+    <div class="entry-card" id="entry-${e.id}">
+        <div class="entry-header" onclick="toggleDetail('${e.id}')">
+            <div class="entry-meta">
+                <span class="badge badge-type">${escHtml(e.type || '')}</span>
+                ${cat ? `<span class="badge ${catCls} ${catIcon}">${escHtml(cat)}</span>` : ''}
+                <span class="badge ${scopeCls}">${escHtml(e.scope || '')}</span>
+                ${scoreBadge}
+                <div class="confidence-bar">
+                    <div class="confidence-track"><div class="confidence-fill ${confLevel}" style="width:${confPct}%"></div></div>
+                    <span class="confidence-val">${confPct}%</span>
+                </div>
+            </div>
+            <div class="entry-l0">${escHtml(e.l0 || e.l2 || 'No content')}</div>
+            ${tags ? `<div class="entry-tags">${tags}</div>` : ''}
+            ${time ? `<div class="entry-time">${time}</div>` : ''}
+        </div>
+        <div class="entry-detail" id="detail-${e.id}" style="display:none">
+            <div class="detail-tabs" id="tabs-${e.id}">
+                <button class="detail-tab active" onclick="switchTab('${e.id}','l0',this)">L0</button>
+                <button class="detail-tab" onclick="switchTab('${e.id}','l1',this)">L1</button>
+                <button class="detail-tab" onclick="switchTab('${e.id}','l2',this)">L2</button>
+            </div>
+            <div class="detail-content" id="content-${e.id}">${escHtml(e.l0 || 'N/A')}</div>
+            <div class="detail-meta">
+                <span>ID: ${e.id}</span>
+                <span>Source: ${e.source || 'N/A'}</span>
+                <span>Created: ${e.created_at || 'N/A'}</span>
+            </div>
+        </div>
+    </div>`;
+}
+
+// Store entry data for tab switching
+let entryData = {};
+const _origRender = renderEntries;
+const origRenderEntries = renderEntries;
+
+// Override fetchEntries to cache data
+const _fetchEntries = fetchEntries;
+
+async function toggleDetail(id) {
+    const el = document.getElementById('detail-' + id);
+    if (el.style.display === 'none') {
+        // Fetch full entry data
+        try {
+            const resp = await fetch('/api/entries/' + id);
+            const data = await resp.json();
+            entryData[id] = data;
+            // Update tab content
+            document.getElementById('content-' + id).textContent = data.l0 || 'N/A';
+        } catch(e) { /* fallback */ }
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+function switchTab(id, level, btn) {
+    const data = entryData[id] || {};
+    const tabs = document.querySelectorAll(`#tabs-${id} .detail-tab`);
+    tabs.forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    const content = document.getElementById('content-' + id);
+    content.textContent = data[level] || 'N/A';
+}
+
+function renderPagination(total, offset, limit) {
+    const pag = document.getElementById('pagination');
+    if (total <= limit) { pag.innerHTML = ''; return; }
+    const pages = Math.ceil(total / limit);
+    const current = Math.floor(offset / limit) + 1;
+    let html = '';
+    if (current > 1) html += `<button onclick="goPage(${current - 2})">← Prev</button>`;
+    html += `<span> Page ${current} / ${pages} (${total} entries) </span>`;
+    if (current < pages) html += `<button onclick="goPage(${current})">Next →</button>`;
+    pag.innerHTML = html;
+}
+
+function goPage(page) { currentOffset = page * PAGE_SIZE; fetchEntries(); window.scrollTo(0, 0); }
+
+function escHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+function escAttr(t) { return (t || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+function timeAgo(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    return Math.floor(diff/86400) + 'd ago';
+}
+
+// Init
+loadCounts();
+loadEntries();
+</script>
+{% endblock %}

@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Environment & Secrets
+.env
+.env.*
+
+# User config (use .yaml.example as template)
+agentbase.yaml
+
+# pytest
+.pytest_cache/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+
+# Qoder
+.qoder/
+
+# --- Benchmark / Evaluation artifacts ---
+# Predictions
+predictions*.jsonl
+
+# Evaluation results
+*.eval-results*
+
+# Benchmark logs
+benchmark_v*.log
+eval_v*.log
+evaluate_v*.log
+locomo_v*_run.log
+
+# --- Temporary / scratch files ---
+11.py
+main.py
+test_adapters.py
+agentbase.db
+agentbase_dashboard.db
+agentbase_dashboard.db-shm
+agentbase_dashboard.db-wal
+
+# --- Internal design docs (not for public release) ---
+SPEC.md
+
+# --- uv lock (regenerate with `uv lock`) ---
+# uv.lock  # uncomment if you want to exclude
+
+# --- Node.js (for agentbase-web) ---
+node_modules/
+.next/
+
+# --- Build artifacts ---
+*.tar.gz
+*.zip

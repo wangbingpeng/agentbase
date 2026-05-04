@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Sessions - AgentBase{% endblock %}
+{% block nav_sessions %}active{% endblock %}
+
+{% block content %}
+<h1>Sessions <span class="count" id="session-count"></span></h1>
+
+<div id="sessions-list" class="sessions-list">
+    <p class="loading">Loading...</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadSessions() {
+    const resp = await fetch('/api/sessions?limit=50');
+    const data = await resp.json();
+    const list = document.getElementById('sessions-list');
+
+    document.getElementById('session-count').textContent = `(${data.total || 0})`;
+
+    if (!data.sessions || data.sessions.length === 0) {
+        list.innerHTML = '<p class="empty">No sessions found.</p>';
+        return;
+    }
+
+    list.innerHTML = data.sessions.map(s => `
+    <div class="session-card">
+        <div class="session-header" onclick="toggleSession('${s.id}')">
+            <div class="session-meta">
+                <span class="badge badge-agent">${escHtml(s.agent_id || 'unknown')}</span>
+                <span class="badge badge-status">${s.status}</span>
+                ${s.project ? `<span class="badge badge-project">${escHtml(s.project)}</span>` : ''}
+            </div>
+            <div class="session-info">
+                <span>${s.message_count} messages</span>
+                <span>Tokens: ${(s.total_tokens_used || 0).toLocaleString()}</span>
+                <span>${timeAgo(s.created_at)}</span>
+            </div>
+        </div>
+        <div class="session-messages" id="session-${s.id}" style="display:none">
+            <p class="loading">Loading messages...</p>
+        </div>
+    </div>`).join('');
+}
+
+async function toggleSession(id) {
+    const el = document.getElementById('session-' + id);
+    if (el.style.display !== 'none' && el.dataset.loaded) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        return;
+    }
+    el.style.display = 'block';
+    const resp = await fetch('/api/sessions/' + id);
+    const data = await resp.json();
+
+    if (data.error) { el.innerHTML = `<p class="empty">${data.error}</p>`; return; }
+
+    const messages = (data.messages || []).map(m => {
+        const roleClass = m.role === 'user' ? 'msg-user' : m.role === 'assistant' ? 'msg-assistant' : 'msg-system';
+        const tokens = m.token_count ? `<div class="msg-tokens">${m.token_count} tokens</div>` : '';
+        return `<div class="message ${roleClass}">
+            <div class="msg-role">${escHtml(m.role)}</div>
+            <div class="msg-content">${escHtml(m.content)}</div>
+            ${tokens}
+        </div>`;
+    }).join('');
+
+    // Token summary bar
+    const totalTokens = data.total_tokens_used || 0;
+    const tokenBar = totalTokens ? `
+        <div style="margin-bottom:12px;padding:8px 12px;background:rgba(99,102,241,0.04);border-radius:6px;font-size:11px;color:#64748b">
+            Total tokens: <strong>${totalTokens.toLocaleString()}</strong> | Messages: <strong>${(data.messages || []).length}</strong>
+        </div>` : '';
+
+    el.innerHTML = tokenBar + (messages || '<p class="empty">No messages.</p>');
+    el.dataset.loaded = 'true';
+}
+
+function escHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+function timeAgo(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    return Math.floor(diff/86400) + 'd ago';
+}
+
+loadSessions();
+</script>
+{% endblock %}

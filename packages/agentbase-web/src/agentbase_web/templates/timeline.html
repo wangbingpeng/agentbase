@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Timeline - AgentBase{% endblock %}
+{% block nav_timeline %}active{% endblock %}
+
+{% block content %}
+<h1>Memory Timeline <span class="count" id="timeline-count"></span></h1>
+
+<div class="filter-bar">
+    <select id="filter-granularity" onchange="loadTimeline()">
+        <option value="day">By Day</option>
+        <option value="week">By Week</option>
+        <option value="month">By Month</option>
+    </select>
+    <select id="filter-days" onchange="loadTimeline()">
+        <option value="30">Last 30 days</option>
+        <option value="90" selected>Last 90 days</option>
+        <option value="180">Last 180 days</option>
+        <option value="365">Last 365 days</option>
+    </select>
+    <input type="text" id="timeline-search" placeholder="Filter by keyword..."
+           onkeydown="if(event.key==='Enter') loadTimeline()">
+    <button onclick="loadTimeline()">Apply</button>
+</div>
+
+<div class="timeline-container" id="timeline-container">
+    <div class="timeline-line"></div>
+    <p class="loading">Loading...</p>
+</div>
+
+<div id="pagination" class="pagination"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentOffset = 0;
+const PAGE_SIZE = 40;
+
+async function loadTimeline() {
+    const granularity = document.getElementById('filter-granularity').value;
+    const days = document.getElementById('filter-days').value;
+    const keyword = document.getElementById('timeline-search').value.trim();
+
+    // Fetch timeline data + entries
+    let entries = [];
+    let total = 0;
+
+    if (keyword) {
+        const resp = await fetch('/api/search?q=' + encodeURIComponent(keyword) + '&top_k=' + PAGE_SIZE);
+        const data = await resp.json();
+        entries = (data.results || []).map(r => ({
+            id: r.id, type: r.type, category: r.category, scope: r.scope,
+            l0: r.l0, confidence: r.confidence, tags: r.tags,
+            created_at: r.created_at || new Date().toISOString()
+        }));
+        total = entries.length;
+    } else {
+        const resp = await fetch('/api/entries?limit=' + PAGE_SIZE + '&offset=' + currentOffset);
+        const data = await resp.json();
+        entries = data.entries || [];
+        total = data.total || 0;
+    }
+
+    document.getElementById('timeline-count').textContent = `(${total})`;
+
+    const container = document.getElementById('timeline-container');
+    if (!entries.length) {
+        container.innerHTML = '<div class="timeline-line"></div><p class="empty">No entries found.</p>';
+        document.getElementById('pagination').innerHTML = '';
+        return;
+    }
+
+    // Group by date
+    const groups = {};
+    entries.forEach(e => {
+        const d = new Date(e.created_at);
+        let key;
+        if (granularity === 'month') key = d.toISOString().substring(0, 7);
+        else if (granularity === 'week') {
+            const weekStart = new Date(d);
+            weekStart.setDate(d.getDate() - d.getDay());
+            key = weekStart.toISOString().substring(0, 10);
+        } else {
+            key = d.toISOString().substring(0, 10);
+        }
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(e);
+    });
+
+    // Sort groups by date descending
+    const sortedKeys = Object.keys(groups).sort().reverse();
+
+    let html = '<div class="timeline-line"></div>';
+    sortedKeys.forEach(key => {
+        const items = groups[key];
+        const dateLabel = formatDateLabel(key, granularity);
+        html += `<div class="time-group" style="padding-left:28px;margin-top:20px">${dateLabel} (${items.length})</div>`;
+        items.forEach(e => {
+            const cat = e.category || '';
+            const catCls = cat ? `badge-cat-${cat}` : '';
+            const catIcon = cat ? `cat-icon-${cat}` : '';
+            const scopeCls = `badge-scope-${e.scope || 'global'}`;
+            const conf = e.confidence || 0;
+            const confLevel = conf >= 0.9 ? 'high' : conf >= 0.6 ? 'medium' : 'low';
+            const confPct = Math.round(conf * 100);
+            const tags = (e.tags || []).slice(0, 3).map(t => `<span class="tag">${escHtml(t)}</span>`).join('');
+
+            html += `
+            <div class="timeline-item">
+                <div class="timeline-dot active"></div>
+                <div class="timeline-card">
+                    <div class="entry-meta">
+                        <span class="badge badge-type">${escHtml(e.type || '')}</span>
+                        ${cat ? `<span class="badge ${catCls} ${catIcon}">${escHtml(cat)}</span>` : ''}
+                        <span class="badge ${scopeCls}">${escHtml(e.scope || '')}</span>
+                        <div class="confidence-bar">
+                            <div class="confidence-track"><div class="confidence-fill ${confLevel}" style="width:${confPct}%"></div></div>
+                            <span class="confidence-val">${confPct}%</span>
+                        </div>
+                    </div>
+                    <div class="entry-l0">${escHtml(e.l0 || 'No content')}</div>
+                    ${tags ? `<div class="entry-tags">${tags}</div>` : ''}
+                </div>
+            </div>`;
+        });
+    });
+
+    container.innerHTML = html;
+
+    // Pagination
+    if (total > PAGE_SIZE && !keyword) {
+        const pages = Math.ceil(total / PAGE_SIZE);
+        const current = Math.floor(currentOffset / PAGE_SIZE) + 1;
+        let pag = '';
+        if (current > 1) pag += `<button onclick="goPage(${current - 2})">← Prev</button>`;
+        pag += `<span> Page ${current} / ${pages} </span>`;
+        if (current < pages) pag += `<button onclick="goPage(${current})">Next →</button>`;
+        document.getElementById('pagination').innerHTML = pag;
+    } else {
+        document.getElementById('pagination').innerHTML = '';
+    }
+}
+
+function formatDateLabel(key, granularity) {
+    if (granularity === 'month') return key;
+    if (granularity === 'week') return 'Week of ' + key;
+    try {
+        const d = new Date(key + 'T00:00:00');
+        return d.toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'});
+    } catch { return key; }
+}
+
+function goPage(page) { currentOffset = page * PAGE_SIZE; loadTimeline(); window.scrollTo(0, 0); }
+function escHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+
+loadTimeline();
+</script>
+{% endblock %}

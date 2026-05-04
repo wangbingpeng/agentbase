@@ -1,0 +1,25 @@
+[project]
+name = "agentbase-core"
+version = "0.1.0"
+description = "AgentBase core engine — Context Database for AI Agents"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0,<3",
+    "pydantic-settings>=2.0,<3",
+    "aiosqlite>=0.20",
+    "python-ulid>=3.0",
+    "pyyaml>=6.0",
+    "sqlite-vec>=0.1.3",
+]
+
+[project.optional-dependencies]
+cjk = ["jieba>=0.42"]
+llm = ["litellm>=1.40"]
+all = ["litellm>=1.40", "jieba>=0.42"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentbase_core"]
