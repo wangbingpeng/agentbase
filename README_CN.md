@@ -6,7 +6,7 @@
 
 AgentBase 是一个为 AI 代理设计的开源上下文数据库。它提供统一的、可查询的存储，涵盖记忆、资源、技能、时序知识、会话历史和可观测性——全部基于 SQLite 构建，零外部基础设施依赖。
 
-**LongMemEval Overall: 73.2% — 完全开源方案中排名第一**
+**LongMemEval Overall: 73.2% — 完全开源方案中表现良好**
 
 ## 基准测试 — LongMemEval 对比
 
@@ -66,7 +66,7 @@ AgentBase 的**零 LLM ingest** 是独特优势：500 题的整个 ingest 阶段
 - Mem0 Pro (93.4%) 和 OMEGA (95.4%) 在绝对准确率上领先——两者都是付费/托管平台，使用专有优化和更强的回答模型。
 - OMEGA 和 Mastra 使用 GPT-4.1 / GPT-4o 作为回答模型；AgentBase 使用 qwen-plus（约 GPT-4o-mini 水平）。模型能力差异约 5-10pp。
 - AgentBase 的多会话 (57.9%) 和时序推理 (62.4%) 仍有较大提升空间，主要受限于 IDH（智能去重与硬化）过度拒绝。
-- **在完全开源、自托管、零依赖的方案中，AgentBase 取得了最高的 LongMemEval 分数。**
+- **在完全开源、自托管、零依赖的方案中，AgentBase 在 LongMemEval 上表现良好。**
 
 ## 创新性
 

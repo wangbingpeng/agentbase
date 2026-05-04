@@ -6,7 +6,7 @@
 
 AgentBase is an open-source context database designed for AI agents. It provides a unified, queryable store for memories, resources, skills, temporal knowledge, session history, and observability — all built on SQLite with zero external infrastructure dependencies.
 
-**LongMemEval Overall: 73.2% — #1 among fully open-source solutions**
+**LongMemEval Overall: 73.2% — Strong performance among fully open-source solutions**
 
 ## Benchmark — LongMemEval Comparison
 
@@ -66,7 +66,7 @@ AgentBase's **zero-LLM ingest** is a unique advantage: the entire 500-question i
 - Mem0 Pro (93.4%) and OMEGA (95.4%) lead in absolute accuracy — both are paid/managed platforms using proprietary optimizations and stronger answer models.
 - OMEGA and Mastra use GPT-4.1 / GPT-4o as the answer model; AgentBase uses qwen-plus (~GPT-4o-mini level). Model capability difference accounts for approximately 5-10pp.
 - AgentBase's Multi-Session (57.9%) and Temporal (62.4%) have room for improvement, currently limited by IDH (Intelligent Dedup & Hardening) over-rejection.
-- **Among fully open-source, self-hosted, zero-dependency solutions, AgentBase achieves the highest LongMemEval score.**
+- **Among fully open-source, self-hosted, zero-dependency solutions, AgentBase demonstrates strong LongMemEval performance.**
 
 ## Innovations
 
