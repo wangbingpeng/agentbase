@@ -62,7 +62,6 @@ locomo_v*_run.log
 
 # --- Temporary / scratch files ---
 11.py
-main.py
 test_adapters.py
 agentbase.db
 agentbase_dashboard.db
